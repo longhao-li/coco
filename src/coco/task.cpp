@@ -7,7 +7,7 @@ using namespace coco;
 coco::detail::io_context_worker::io_context_worker() noexcept
     : m_should_exit{false}, m_is_running{false}, m_ring{}, m_wake_up{-1},
       m_wake_up_buffer{}, m_mutex{}, m_tasks{} {
-    int result = io_uring_queue_init(1024, &m_ring, 0);
+    int result = io_uring_queue_init(1024, &m_ring, IORING_SETUP_SQPOLL);
     assert(result == 0);
     (void)result;
 
@@ -121,17 +121,21 @@ coco::io_context::io_context(uint32_t num_workers) noexcept
     m_num_workers = num_workers;
 
     m_workers = std::make_unique<detail::io_context_worker[]>(num_workers);
-    m_threads = std::make_unique<std::jthread[]>(m_num_workers);
-
-    for (uint32_t i = 0; i < num_workers; ++i)
-        m_threads[i] =
-            std::jthread([worker = &(m_workers[i])] { worker->run(); });
 }
 
 coco::io_context::~io_context() {
     this->stop();
     for (uint32_t i = 0; i < m_num_workers; ++i)
         m_threads[i].join();
+}
+
+auto coco::io_context::run() noexcept -> void {
+    m_threads = std::make_unique<std::jthread[]>(m_num_workers - 1);
+    for (uint32_t i = 0; i < m_num_workers - 1; ++i)
+        m_threads[i] =
+            std::jthread([worker = &(m_workers[i])] { worker->run(); });
+
+    m_workers[m_num_workers - 1].run();
 }
 
 auto coco::io_context::stop() noexcept -> void {

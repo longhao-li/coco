@@ -95,7 +95,7 @@ auto coco::ip_address::to_string() const noexcept -> std::string {
 coco::tcp_connection::~tcp_connection() {
     if (m_socket != -1) {
         assert(m_socket >= 0);
-        close(m_socket);
+        ::close(m_socket);
     }
 }
 
@@ -106,7 +106,7 @@ auto coco::tcp_connection::operator=(tcp_connection &&other) noexcept
 
     if (m_socket != -1) {
         assert(m_socket >= 0);
-        close(m_socket);
+        ::close(m_socket);
     }
 
     m_address = other.m_address;
@@ -197,12 +197,12 @@ auto coco::tcp_connection::connect(ip_address address, uint16_t port) noexcept
 
     int result = co_await awaitable;
     if (result < 0) {
-        close(new_socket);
+        ::close(new_socket);
         co_return std::error_code{-result, std::system_category()};
     }
 
     if (m_socket != -1)
-        close(m_socket);
+        ::close(m_socket);
 
     m_address = address;
     m_port    = port;
@@ -377,9 +377,41 @@ auto coco::tcp_connection::shutdown() noexcept -> std::error_code {
     return {};
 }
 
+auto coco::tcp_connection::close() noexcept -> void {
+    if (m_socket != -1) {
+        ::close(m_socket);
+        m_socket = -1;
+    }
+}
+
+auto coco::tcp_connection::keepalive(bool enable) noexcept -> std::error_code {
+    int value = enable ? 1 : 0;
+    int result =
+        setsockopt(m_socket, SOL_SOCKET, SO_KEEPALIVE, &value, sizeof(value));
+    if (result == -1)
+        return std::error_code{errno, std::system_category()};
+    return std::error_code{};
+}
+
+auto coco::tcp_connection::set_timeout(int64_t microseconds) noexcept
+    -> std::error_code {
+    timeval timeout{
+        .tv_sec  = microseconds / 1000000,
+        .tv_usec = microseconds % 1000000,
+    };
+
+    int result = setsockopt(m_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout,
+                            sizeof(timeout));
+    if (result == -1)
+        return std::error_code{errno, std::system_category()};
+    return std::error_code{};
+}
+
 coco::tcp_server::~tcp_server() {
-    m_should_exit.store(true, std::memory_order_release);
-    close(m_socket);
+    if (m_socket != -1) {
+        assert(m_socket >= 0);
+        ::close(m_socket);
+    }
 }
 
 auto coco::tcp_server::listen(const ip_address &address, uint16_t port) noexcept
@@ -407,23 +439,22 @@ auto coco::tcp_server::listen(const ip_address &address, uint16_t port) noexcept
     if (new_socket < 0)
         return {errno, std::system_category()};
 
-    int result =
-        ::bind(new_socket, reinterpret_cast<sockaddr *>(&temp), length);
+    int result = bind(new_socket, reinterpret_cast<sockaddr *>(&temp), length);
     if (result < 0) {
         int error = errno;
-        close(new_socket);
+        ::close(new_socket);
         return {error, std::system_category()};
     }
 
     result = ::listen(new_socket, SOMAXCONN);
     if (result < 0) {
         int error = errno;
-        close(new_socket);
+        ::close(new_socket);
         return {error, std::system_category()};
     }
 
     if (m_socket != -1)
-        close(m_socket);
+        ::close(m_socket);
 
     m_address = address;
     m_port    = port;
@@ -432,63 +463,107 @@ auto coco::tcp_server::listen(const ip_address &address, uint16_t port) noexcept
     // Set reuse address and port.
     int enable = 1;
     setsockopt(new_socket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
+
+    enable = 1;
     setsockopt(new_socket, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable));
 
     return {};
 }
 
-auto coco::tcp_server::run(io_context &io_ctx) noexcept -> void {
-    if (m_is_looping.exchange(true, std::memory_order_acq_rel)) [[unlikely]]
-        return;
+namespace {
 
-    sockaddr_storage temp{};
+struct accept_awaitable {
+    using promise_type     = promise<std::error_code>;
+    using coroutine_handle = std::coroutine_handle<promise_type>;
 
-    int        peer   = -1;
-    int        family = AF_INET;
-    uint16_t   port   = 0;
-    socklen_t  length = sizeof(temp);
-    ip_address address;
+    coco::detail::user_data m_userdata;
 
-    m_should_exit.store(false, std::memory_order_release);
-    for (;;) {
-        peer   = -1;
-        length = sizeof(temp);
+    int              m_socket;
+    sockaddr_storage m_sockaddr;
+    socklen_t        m_socklen;
 
-        peer = accept(m_socket, reinterpret_cast<sockaddr *>(&temp), &length);
-        // This TCP server is destroying.
-        if (m_should_exit.load(std::memory_order_acquire)) {
-            if (peer >= 0)
-                close(peer);
-            break;
-        }
-
-        assert(peer >= 0);
-        family = temp.ss_family;
-
-        if (family == AF_INET) {
-            auto        *v4 = reinterpret_cast<sockaddr_in *>(&temp);
-            ipv4_address v4_addr;
-
-            port = ntohs(v4->sin_port);
-            memcpy(&v4_addr, &v4->sin_addr, sizeof(in_addr));
-            address = v4_addr;
-        } else {
-            assert(family == AF_INET6);
-            auto        *v6 = reinterpret_cast<sockaddr_in6 *>(&temp);
-            ipv6_address v6_addr;
-
-            port = ntohs(v6->sin6_port);
-            memcpy(&v6_addr, &v6->sin6_addr, sizeof(in6_addr));
-            address = v6_addr;
-        }
-
-        auto &worker = io_ctx.acquire_worker();
-        worker.execute(this->on_accept({address, port, peer}));
+    auto await_ready() noexcept -> bool {
+        return false;
     }
+
+    auto await_suspend(coroutine_handle coroutine) noexcept -> void {
+        m_userdata.coroutine = coroutine.address();
+        m_userdata.cqe_res   = 0;
+        m_userdata.cqe_flags = 0;
+
+        auto *worker = coroutine.promise().worker();
+        assert(worker != nullptr);
+
+        io_uring     *ring = worker->io_ring();
+        io_uring_sqe *sqe  = io_uring_get_sqe(ring);
+        while (sqe == nullptr) [[unlikely]] {
+            io_uring_submit(ring);
+            sqe = io_uring_get_sqe(ring);
+        }
+
+        m_socklen = sizeof(m_sockaddr);
+        io_uring_prep_accept(sqe, m_socket,
+                             reinterpret_cast<sockaddr *>(&m_sockaddr),
+                             &m_socklen, SOCK_NONBLOCK | SOCK_CLOEXEC);
+        sqe->user_data = reinterpret_cast<uint64_t>(&m_userdata);
+
+        int result = io_uring_submit(ring);
+        assert(result >= 1);
+        (void)result;
+    }
+
+    auto await_resume() noexcept -> int {
+        return m_userdata.cqe_res;
+    }
+};
+
+} // namespace
+
+auto coco::tcp_server::accept(tcp_connection &connection) noexcept
+    -> task<std::error_code> {
+    assert(m_socket != -1);
+    accept_awaitable awaitable{
+        .m_userdata = {},
+        .m_socket   = m_socket,
+        .m_sockaddr = {},
+        .m_socklen  = 0,
+    };
+
+    int peer = co_await awaitable;
+    if (peer < 0) [[unlikely]]
+        co_return std::error_code{-peer, std::system_category()};
+
+    sockaddr_storage *temp = &awaitable.m_sockaddr;
+
+    int        family = temp->ss_family;
+    ip_address address;
+    uint16_t   port = 0;
+
+    if (family == AF_INET) {
+        auto        *v4 = reinterpret_cast<sockaddr_in *>(temp);
+        ipv4_address v4_addr;
+
+        port = ntohs(v4->sin_port);
+        memcpy(&v4_addr, &v4->sin_addr, sizeof(in_addr));
+        address = v4_addr;
+    } else {
+        assert(family == AF_INET6);
+        auto        *v6 = reinterpret_cast<sockaddr_in6 *>(temp);
+        ipv6_address v6_addr;
+
+        port = ntohs(v6->sin6_port);
+        memcpy(&v6_addr, &v6->sin6_addr, sizeof(in6_addr));
+        address = v6_addr;
+    }
+
+    connection = tcp_connection{address, port, peer};
+    co_return std::error_code{};
 }
 
-auto coco::tcp_server::on_accept(tcp_connection connection) noexcept
-    -> task<void> {
-    (void)connection;
-    co_return;
+auto coco::tcp_server::close() noexcept -> void {
+    if (m_socket != -1) {
+        assert(m_socket >= 0);
+        ::close(m_socket);
+        m_socket = -1;
+    }
 }

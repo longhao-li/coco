@@ -2,6 +2,8 @@
 
 #include "task.hpp"
 
+#include <chrono>
+
 namespace coco {
 
 /// \class ipv4_address
@@ -516,6 +518,29 @@ public:
         -> task<std::error_code>;
 
     /// \brief
+    ///   Set timeout for asynchronous receive operations. See `received()` for
+    ///   details.
+    /// \tparam Rep
+    ///   Type representation of the time type. See std::chrono::duration for
+    ///   details.
+    /// \tparam Period
+    ///   Ratio type that is used to measure how to do conversion between
+    ///   different duration types. See std::chrono::duration for details.
+    /// \param duration
+    ///   Timeout duration of receive operation. Nanosecond and below ratios are
+    ///   not supported. Pass 0 to remove timeout events.
+    /// \return
+    ///   An error code that represents the result. Return 0 if succeeded to set
+    ///   timeout for receive operation.
+    template <class Rep, class Period>
+    auto set_timeout(std::chrono::duration<Rep, Period> duration) noexcept
+        -> std::error_code {
+        static_assert(std::ratio_greater_equal<std::micro, Period>::value);
+        return this->set_timeout(
+            std::chrono::duration_cast<std::chrono::microseconds>(duration));
+    }
+
+    /// \brief
     ///   Async send data to peer.
     /// \param data
     ///   Pointer to start of data to be sent.
@@ -552,7 +577,7 @@ public:
     /// \return
     ///   A task that receives data to the target endpoint. Result of the task
     ///   is a system error code that represents the receive result. The error
-    ///   code is 0 if succeeded.
+    ///   code is 0 if succeeded. The error code is `EAGAIN` if timeout occurs.
     COCO_API auto receive(void *buffer, size_t size) const noexcept
         -> task<std::error_code>;
 
@@ -567,7 +592,7 @@ public:
     /// \return
     ///   A task that receives data to the target endpoint. Result of the task
     ///   is a system error code that represents the receive result. The error
-    ///   code is 0 if succeeded.
+    ///   code is 0 if succeeded. The error code is `EAGAIN` if timeout occurs.
     COCO_API auto receive(void *buffer, size_t size,
                           size_t &received) const noexcept
         -> task<std::error_code>;
@@ -577,6 +602,10 @@ public:
     /// \return
     ///   System error code of this operation. The error code is 0 if succeeded.
     COCO_API auto shutdown() noexcept -> std::error_code;
+
+    /// \brief
+    ///   Close this TCP connection.
+    COCO_API auto close() noexcept -> void;
 
     /// \brief
     ///   Enable or disable keepalive for this TCP connection.
@@ -606,6 +635,17 @@ public:
 
 private:
     /// \brief
+    ///   For internal usage. Set timeout for asynchronous receive operations.
+    ///   The `received` parameter will be set to 0 if timeout occurs.
+    /// \param microseconds
+    ///   Microseconds of the receive timeout duration. Pass 0 to remove the
+    ///   timeout event.
+    /// \return
+    ///   An error code that represents the result. Return 0 if succeeded to set
+    ///   timeout for receive operation.
+    COCO_API auto set_timeout(int64_t microseconds) noexcept -> std::error_code;
+
+    /// \brief
     ///   For internal usage. Create a new TCP connection with the given
     ///   address, port and socket.
     /// \param address
@@ -632,29 +672,39 @@ class tcp_server {
 public:
     /// \brief
     ///   Create an empty TCP server.
-    COCO_API tcp_server() noexcept
-        : m_address{}, m_port{}, m_socket{-1}, m_should_exit{false},
-          m_is_looping{false} {}
+    tcp_server() noexcept : m_address{}, m_port{}, m_socket{-1} {}
 
     /// \brief
     ///   TCP server is not allowed to be copied.
     tcp_server(const tcp_server &other) = delete;
 
     /// \brief
-    ///   TCP server is not allowed to be moved.
-    tcp_server(tcp_server &&other) = delete;
+    ///   Move constructor of TCP server.
+    /// \param other
+    ///   The TCP server to be moved from. The moved TCP server will be set to
+    ///   empty.
+    tcp_server(tcp_server &&other) noexcept
+        : m_address{other.m_address}, m_port{other.m_port},
+          m_socket{other.m_socket} {
+        other.m_socket = -1;
+    }
 
     /// \brief
     ///   Destroy this TCP server.
-    COCO_API virtual ~tcp_server();
+    COCO_API ~tcp_server();
 
     /// \brief
     ///   TCP server is not allowed to be copied.
     auto operator=(const tcp_server &other) = delete;
 
     /// \brief
-    ///   TCP server is not allowed to be moved.
-    auto operator=(tcp_server &&other) = delete;
+    ///   Move assignment of TCP server.
+    /// \param other
+    ///   The TCP server to be moved from. The moved TCP server will be set to
+    ///   empty.
+    /// \return
+    ///   Reference to this TCP server.
+    COCO_API auto operator=(tcp_server &&other) noexcept -> tcp_server &;
 
     /// \brief
     ///   Bind this TCP server to the specified address and start listening to
@@ -663,15 +713,26 @@ public:
     ///   The IP address that this TCP server to bind.
     /// \param port
     ///   The local port that this TCP server to bind.
+    /// \return
+    ///   An error code that represents the listen result. The error code is 0
+    ///   if succeeded to listen to the specified address and port.
     COCO_API auto listen(const ip_address &address, uint16_t port) noexcept
         -> std::error_code;
 
     /// \brief
-    ///   Start running and accepting income TCP connections. This method will
-    ///   block current thread.
-    /// \param[in] io_ctx
-    ///   The IO context that is used to handle TCP connections.
-    COCO_API auto run(io_context &io_ctx) noexcept -> void;
+    ///   Try to accept a new TCP connection asynchronously.
+    /// \param[out] connection
+    ///   The TCP connection object that is used to store the new connection.
+    /// \return
+    ///   A task that receives connection from the target endpoint. Result of
+    ///   the task is a system error code that represents the accept result. The
+    ///   error code is 0 if succeeded.
+    COCO_API auto accept(tcp_connection &connection) noexcept
+        -> task<std::error_code>;
+
+    /// \brief
+    ///   Close this TCP server.
+    COCO_API auto close() noexcept -> void;
 
     /// \brief
     ///   Get local IP address.
@@ -691,23 +752,10 @@ public:
         return m_port;
     }
 
-    /// \brief
-    ///   Callback method that is called when a new connection is accepted.
-    ///   Override this method to support customize behavior.
-    /// \param connection
-    ///   The new connection that is accepted.
-    /// \return
-    ///   A task that represents the asynchronous method to be called. Default
-    ///   implementation returns a task that does nothing.
-    COCO_API virtual auto on_accept(tcp_connection connection) noexcept
-        -> task<void>;
-
 private:
-    ip_address       m_address;
-    uint16_t         m_port;
-    int              m_socket;
-    std::atomic_bool m_should_exit;
-    std::atomic_bool m_is_looping;
+    ip_address m_address;
+    uint16_t   m_port;
+    int        m_socket;
 };
 
 } // namespace coco

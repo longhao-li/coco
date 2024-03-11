@@ -275,7 +275,8 @@ public:
     ///   value.
     /// \param value
     ///   Returnd object of the coroutine.
-    template <class From>
+    template <class From, class = std::enable_if_t<
+                              std::is_constructible_v<value_type, From &&>>>
     auto return_value(From &&value) noexcept(
         std::is_nothrow_constructible_v<value_type, From &&>) -> void;
 
@@ -641,7 +642,7 @@ template <class T> auto promise<T>::unhandled_exception() noexcept -> void {
 }
 
 template <class T>
-template <class From>
+template <class From, class>
 auto promise<T>::return_value(From &&value) noexcept(
     std::is_nothrow_constructible_v<value_type, From &&>) -> void {
     assert(m_kind == value_kind::null);
@@ -923,6 +924,11 @@ public:
     /// \brief
     ///   io_context is not allowed to be moved.
     auto operator=(io_context &&other) = delete;
+
+    /// \brief
+    ///   Start io_context threads. This method will also block current thread
+    ///   and handle IO events and tasks.
+    COCO_API auto run() noexcept -> void;
 
     /// \brief
     ///   Stop all workers. This method will send a stop request and return
