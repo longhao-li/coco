@@ -93,7 +93,7 @@ auto coco::timer::wait(int64_t nanoseconds) noexcept -> task<std::error_code> {
     result = co_await awaitable;
 
     if (result < 0)
-        co_return std::error_code{result, std::system_category()};
+        co_return std::error_code{-result, std::system_category()};
 
     co_return std::error_code{};
 }

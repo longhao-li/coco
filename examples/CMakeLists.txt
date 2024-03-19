@@ -2,6 +2,7 @@ set(
     COCO_EXAMPLE_PROJECTS
     echo
     timer
+    copy
 )
 
 foreach(COCO_PROJECT ${COCO_EXAMPLE_PROJECTS})

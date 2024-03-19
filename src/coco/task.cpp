@@ -125,8 +125,6 @@ coco::io_context::io_context(uint32_t num_workers) noexcept
 
 coco::io_context::~io_context() {
     this->stop();
-    for (uint32_t i = 0; i < m_num_workers; ++i)
-        m_threads[i].join();
 }
 
 auto coco::io_context::run() noexcept -> void {
