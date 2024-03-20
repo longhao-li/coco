@@ -3,6 +3,7 @@
 #include <sys/eventfd.h>
 
 using namespace coco;
+using namespace coco::detail;
 
 coco::detail::io_context_worker::io_context_worker() noexcept
     : m_should_exit{false}, m_is_running{false}, m_ring{}, m_wake_up{-1},
@@ -76,7 +77,7 @@ auto coco::detail::io_context_worker::run() noexcept -> void {
                 data->cqe_flags = cqe->flags;
 
                 auto coroutine =
-                    std::coroutine_handle<detail::promise_base>::from_address(
+                    std::coroutine_handle<promise_base>::from_address(
                         data->coroutine);
                 auto stack_bottom = coroutine.promise().stack_bottom();
 
@@ -120,7 +121,7 @@ coco::io_context::io_context(uint32_t num_workers) noexcept
     num_workers   = (num_workers == 0) ? 1 : num_workers;
     m_num_workers = num_workers;
 
-    m_workers = std::make_unique<detail::io_context_worker[]>(num_workers);
+    m_workers = std::make_unique<io_context_worker[]>(num_workers);
 }
 
 coco::io_context::~io_context() {

@@ -1,9 +1,9 @@
-#include <coco/file.hpp>
+#include <coco/io.hpp>
 
 using namespace coco;
 
-auto copy(io_context &io_ctx, const char *from, const char *to) noexcept
-    -> task<void> {
+auto copy(io_context &io_ctx, const char *from,
+          const char *to) noexcept -> task<void> {
     std::error_code error;
     size_t          size;
     uint32_t        bytes;
