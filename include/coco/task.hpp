@@ -169,8 +169,8 @@ public:
     ///   Maintain the coroutine status and do suspention or resumption.
     /// \return
     ///   A customized promise awaitable object.
-    [[nodiscard]] auto
-    final_suspend() const noexcept -> detail::promise_awaitable {
+    [[nodiscard]] auto final_suspend() const noexcept
+        -> detail::promise_awaitable {
         return {};
     }
 
@@ -186,8 +186,8 @@ public:
     ///   Get current stack bottom of this coroutine call chain.
     /// \return
     ///   Stack bottom of this coroutine call chain.
-    [[nodiscard]] auto
-    stack_bottom() const noexcept -> std::coroutine_handle<> {
+    [[nodiscard]] auto stack_bottom() const noexcept
+        -> std::coroutine_handle<> {
         return m_stack_bottom->m_coroutine;
     }
 
@@ -563,8 +563,8 @@ public:
     /// \brief
     ///   C++20 coroutine awaitable type method. Suspend the caller coroutine
     ///   and start this one.
-    auto
-    operator co_await() const noexcept -> detail::task_awaitable<value_type> {
+    auto operator co_await() const noexcept
+        -> detail::task_awaitable<value_type> {
         return detail::task_awaitable<value_type>{m_coroutine};
     }
 
@@ -840,7 +840,6 @@ public:
         return &m_ring;
     }
 
-private:
     /// \brief
     ///   Execute a new task in this worker. This method will wake up this
     ///   worker immediately.

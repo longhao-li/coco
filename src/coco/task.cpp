@@ -35,9 +35,11 @@ auto coco::detail::io_context_worker::wake_up() noexcept -> void {
         sqe = io_uring_get_sqe(&m_ring);
     }
 
-    sqe->user_data = 0;
-    uint64_t value = 1;
-    write(m_wake_up, &value, sizeof(value));
+    sqe->user_data   = 0;
+    uint64_t value   = 1;
+    ssize_t  written = write(m_wake_up, &value, sizeof(value));
+    assert(written == sizeof(value));
+    (void)written;
 
     io_uring_prep_read(sqe, m_wake_up, &m_wake_up_buffer,
                        sizeof(m_wake_up_buffer), 0);

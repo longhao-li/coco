@@ -9,7 +9,7 @@ namespace coco {
 /// \class read_awaitable
 /// \brief
 ///   For internal usage. Awaitable object for async read operation.
-class read_awaitable {
+class [[nodiscard]] read_awaitable {
 public:
     /// \brief
     ///   For internal usage. Create a new read awaitable object to prepare for
@@ -84,7 +84,7 @@ private:
 /// \class write_awaitable
 /// \brief
 ///   For internal usage. Awaitable object for async write operation.
-class write_awaitable {
+class [[nodiscard]] write_awaitable {
 public:
     /// \brief
     ///   For internal usage. Create a new write awaitable object to prepare for
@@ -159,7 +159,7 @@ private:
 /// \class connect_awaitable
 /// \brief
 ///   For internal usage. Awaitable object for async connect operation.
-class connect_awaitable {
+class [[nodiscard]] connect_awaitable {
 public:
     /// \brief
     ///   For internal usage. Try to connect to the specified peer address.
@@ -233,7 +233,7 @@ private:
 /// \class send_awaitable
 /// \brief
 ///   For internal usage. Awaitable object for async send operation.
-class send_awaitable {
+class [[nodiscard]] send_awaitable {
 public:
     /// \brief
     ///   For internal usage. Create a new send awaitable object to prepare for
@@ -304,7 +304,7 @@ private:
 /// \class recv_awaitable
 /// \brief
 ///   For internal usage. Awaitable object for async recv operation.
-class recv_awaitable {
+class [[nodiscard]] recv_awaitable {
 public:
     /// \brief
     ///   For internal usage. Create a new recv awaitable object to prepare for
@@ -374,7 +374,7 @@ private:
 /// \class timeout_awaitable
 /// \brief
 ///   For internal usage. Awaitable object for async timeout operation.
-class timeout_awaitable {
+class [[nodiscard]] timeout_awaitable {
 public:
     /// \brief
     ///   For internal usage. Create a new timer awaitable object to prepare for
@@ -484,8 +484,8 @@ public:
     ///   The ipv4_address to copy from.
     /// \return
     ///   A reference to the ipv4_address.
-    auto
-    operator=(const ipv4_address &other) noexcept -> ipv4_address & = default;
+    auto operator=(const ipv4_address &other) noexcept
+        -> ipv4_address & = default;
 
     /// \brief
     ///   ipv4_address is trivially moveable.
@@ -598,8 +598,8 @@ public:
     ///   The ipv6_address to copy from.
     /// \return
     ///   A reference to the ipv6_address.
-    auto
-    operator=(const ipv6_address &other) noexcept -> ipv6_address & = default;
+    auto operator=(const ipv6_address &other) noexcept
+        -> ipv6_address & = default;
 
     /// \brief
     ///   ipv6_address is trivially moveable.
@@ -924,8 +924,8 @@ public:
     /// \param other
     ///   The TCP connection to move from. The moved TCP connection will be set
     ///   to empty.
-    COCO_API auto
-    operator=(tcp_connection &&other) noexcept -> tcp_connection &;
+    COCO_API auto operator=(tcp_connection &&other) noexcept
+        -> tcp_connection &;
 
     /// \brief
     ///   Checks if this is an empty TCP connection.
@@ -949,8 +949,8 @@ public:
     ///   A task that connects to the target endpoint. Result of the task is a
     ///   system error code that represents the connect result. The error code
     ///   is 0 if succeeded.
-    COCO_API auto connect(ip_address address,
-                          uint16_t   port) noexcept -> connect_awaitable;
+    COCO_API auto connect(ip_address address, uint16_t port) noexcept
+        -> connect_awaitable;
 
     /// \brief
     ///   Set timeout for asynchronous receive operations. See `received()` for
@@ -1001,8 +1001,8 @@ public:
     ///   A task that sends data to the target endpoint. Result of the task is a
     ///   system error code that represents the send result. The error code is 0
     ///   if succeeded.
-    auto send(const void *data, size_t size,
-              size_t &sent) const noexcept -> send_awaitable {
+    auto send(const void *data, size_t size, size_t &sent) const noexcept
+        -> send_awaitable {
         return {m_socket, data, size, &sent};
     }
 
@@ -1032,8 +1032,8 @@ public:
     ///   A task that receives data to the target endpoint. Result of the task
     ///   is a system error code that represents the receive result. The error
     ///   code is 0 if succeeded. The error code is `EAGAIN` if timeout occurs.
-    auto receive(void *buffer, size_t size,
-                 size_t &received) const noexcept -> recv_awaitable {
+    auto receive(void *buffer, size_t size, size_t &received) const noexcept
+        -> recv_awaitable {
         return {m_socket, buffer, size, &received};
     }
 
@@ -1120,8 +1120,8 @@ public:
         ///   A boolean value that specifies whether to suspend current
         ///   coroutine. Current coroutine will be suspended if no error occurs.
         template <class Promise>
-        auto
-        await_suspend(std::coroutine_handle<Promise> coro) noexcept -> bool {
+        auto await_suspend(std::coroutine_handle<Promise> coro) noexcept
+            -> bool {
             m_userdata.coroutine = coro.address();
             return this->suspend(coro.promise().worker());
         }
@@ -1146,8 +1146,8 @@ public:
         ///   suspend this coroutine.
         /// \param[in] worker
         ///   Worker for current thread.
-        COCO_API auto
-        suspend(detail::io_context_worker *worker) noexcept -> bool;
+        COCO_API auto suspend(detail::io_context_worker *worker) noexcept
+            -> bool;
 
     private:
         detail::user_data m_userdata;
@@ -1204,8 +1204,8 @@ public:
     /// \return
     ///   An error code that represents the listen result. The error code is 0
     ///   if succeeded to listen to the specified address and port.
-    COCO_API auto listen(const ip_address &address,
-                         uint16_t          port) noexcept -> std::error_code;
+    COCO_API auto listen(const ip_address &address, uint16_t port) noexcept
+        -> std::error_code;
 
     /// \brief
     ///   Try to accept a new TCP connection asynchronously.
@@ -1338,8 +1338,8 @@ public:
     /// \return
     ///   A system error code that represents the open result. Return 0 if
     ///   succeeded. This method does not modify this object if failed.
-    COCO_API auto open(std::string_view path,
-                       flag             flags) noexcept -> std::error_code;
+    COCO_API auto open(std::string_view path, flag flags) noexcept
+        -> std::error_code;
 
     /// \brief
     ///   Async read data from this file.
@@ -1368,8 +1368,8 @@ public:
     ///   A task that reads data from this file. Result of the task is a system
     ///   error code that represents the receive result. The error code is 0 if
     ///   succeeded.
-    auto read(size_t offset, void *buffer,
-              uint32_t size) noexcept -> read_awaitable {
+    auto read(size_t offset, void *buffer, uint32_t size) noexcept
+        -> read_awaitable {
         return {m_file, buffer, size, nullptr, offset};
     }
 
@@ -1385,8 +1385,8 @@ public:
     ///   A task that reads data from this file. Result of the task is a system
     ///   error code that represents the receive result. The error code is 0 if
     ///   succeeded.
-    auto read(void *buffer, uint32_t size,
-              uint32_t &bytes) noexcept -> read_awaitable {
+    auto read(void *buffer, uint32_t size, uint32_t &bytes) noexcept
+        -> read_awaitable {
         return {m_file, buffer, size, &bytes, uint64_t(-1)};
     }
 
@@ -1437,8 +1437,8 @@ public:
     ///   A task that writes data from this file. Result of the task is a system
     ///   error code that represents the receive result. The error code is 0 if
     ///   succeeded.
-    auto write(size_t offset, const void *data,
-               uint32_t size) noexcept -> write_awaitable {
+    auto write(size_t offset, const void *data, uint32_t size) noexcept
+        -> write_awaitable {
         return {m_file, data, size, nullptr, offset};
     }
 
@@ -1454,8 +1454,8 @@ public:
     ///   A task that writes data from this file. Result of the task is a system
     ///   error code that represents the receive result. The error code is 0 if
     ///   succeeded.
-    auto write(const void *data, uint32_t size,
-               uint32_t &bytes) noexcept -> write_awaitable {
+    auto write(const void *data, uint32_t size, uint32_t &bytes) noexcept
+        -> write_awaitable {
         return {m_file, data, size, &bytes, uint64_t(-1)};
     }
 
@@ -1487,8 +1487,8 @@ public:
     ///   Offset of the internal IO pointer.
     /// \return
     ///   An error code that represents the seek result. Return 0 if succeeded.
-    COCO_API auto seek(seek_whence whence,
-                       ptrdiff_t   offset) noexcept -> std::error_code;
+    COCO_API auto seek(seek_whence whence, ptrdiff_t offset) noexcept
+        -> std::error_code;
 
     /// \brief
     ///   Flush data and metadata of this file.
@@ -1514,41 +1514,41 @@ constexpr auto operator~(binary_file::flag flag) noexcept -> binary_file::flag {
     return static_cast<binary_file::flag>(~static_cast<uint32_t>(flag));
 }
 
-constexpr auto operator|(binary_file::flag lhs,
-                         binary_file::flag rhs) noexcept -> binary_file::flag {
+constexpr auto operator|(binary_file::flag lhs, binary_file::flag rhs) noexcept
+    -> binary_file::flag {
     return static_cast<binary_file::flag>(static_cast<uint32_t>(lhs) |
                                           static_cast<uint32_t>(rhs));
 }
 
-constexpr auto operator&(binary_file::flag lhs,
-                         binary_file::flag rhs) noexcept -> binary_file::flag {
+constexpr auto operator&(binary_file::flag lhs, binary_file::flag rhs) noexcept
+    -> binary_file::flag {
     return static_cast<binary_file::flag>(static_cast<uint32_t>(lhs) &
                                           static_cast<uint32_t>(rhs));
 }
 
-constexpr auto operator^(binary_file::flag lhs,
-                         binary_file::flag rhs) noexcept -> binary_file::flag {
+constexpr auto operator^(binary_file::flag lhs, binary_file::flag rhs) noexcept
+    -> binary_file::flag {
     return static_cast<binary_file::flag>(static_cast<uint32_t>(lhs) ^
                                           static_cast<uint32_t>(rhs));
 }
 
-constexpr auto
-operator|=(binary_file::flag &lhs,
-           binary_file::flag  rhs) noexcept -> binary_file::flag & {
+constexpr auto operator|=(binary_file::flag &lhs,
+                          binary_file::flag  rhs) noexcept
+    -> binary_file::flag & {
     lhs = (lhs | rhs);
     return lhs;
 }
 
-constexpr auto
-operator&=(binary_file::flag &lhs,
-           binary_file::flag  rhs) noexcept -> binary_file::flag & {
+constexpr auto operator&=(binary_file::flag &lhs,
+                          binary_file::flag  rhs) noexcept
+    -> binary_file::flag & {
     lhs = (lhs & rhs);
     return lhs;
 }
 
-constexpr auto
-operator^=(binary_file::flag &lhs,
-           binary_file::flag  rhs) noexcept -> binary_file::flag & {
+constexpr auto operator^=(binary_file::flag &lhs,
+                          binary_file::flag  rhs) noexcept
+    -> binary_file::flag & {
     lhs = (lhs ^ rhs);
     return lhs;
 }

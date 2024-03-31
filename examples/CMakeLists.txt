@@ -3,6 +3,8 @@ set(
     echo
     timer
     copy
+    yield
+    mutex
 )
 
 foreach(COCO_PROJECT ${COCO_EXAMPLE_PROJECTS})
