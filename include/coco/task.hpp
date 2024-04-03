@@ -814,7 +814,7 @@ public:
         auto  handle = coro.detach();
         auto &base   = static_cast<promise_base &>(handle.promise());
         base.set_worker(this);
-        this->schedule(handle);
+        this->execute(handle);
     }
 
     /// \brief
