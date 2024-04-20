@@ -69,25 +69,28 @@ auto coco::detail::io_context_worker::run() noexcept -> void {
         };
 
         int result = io_uring_wait_cqe_timeout(&m_ring, &cqe, &timeout);
-        assert(result == 0 || -result == ETIME);
-
-        if (result == 0) {
-            io_uring_cq_advance(&m_ring, 1);
-            if (cqe->user_data != 0) {
-                auto *data      = reinterpret_cast<user_data *>(cqe->user_data);
-                data->cqe_res   = cqe->res;
-                data->cqe_flags = cqe->flags;
-
-                auto coroutine =
-                    std::coroutine_handle<promise_base>::from_address(
-                        data->coroutine);
-                auto stack_bottom = coroutine.promise().stack_bottom();
-
-                assert(!coroutine.done());
-                coroutine.resume();
-                if (stack_bottom.done())
-                    stack_bottom.destroy();
+        while (result == 0) {
+            auto *data = static_cast<user_data *>(io_uring_cqe_get_data(cqe));
+            if (data == nullptr) {
+                io_uring_cq_advance(&m_ring, 1);
+                result = io_uring_peek_cqe(&m_ring, &cqe);
+                continue;
             }
+
+            data->cqe_res   = cqe->res;
+            data->cqe_flags = cqe->flags;
+
+            auto coroutine = std::coroutine_handle<promise_base>::from_address(
+                data->coroutine);
+            auto stack_bottom = coroutine.promise().stack_bottom();
+
+            assert(!coroutine.done());
+            coroutine.resume();
+            if (stack_bottom.done())
+                stack_bottom.destroy();
+
+            io_uring_cq_advance(&m_ring, 1);
+            result = io_uring_peek_cqe(&m_ring, &cqe);
         }
 
         { // Handle tasks.
