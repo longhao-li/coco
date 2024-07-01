@@ -99,9 +99,17 @@ auto coco::detail::io_context_worker::run() noexcept -> void {
         }
 
         for (auto &coroutine : tasks) {
+            // May be not safe to access coroutine.promise() here. But this
+            // avoids miss-destorying coroutine.
+            auto stack_bottom =
+                std::coroutine_handle<promise_base>::from_address(
+                    coroutine.address())
+                    .promise()
+                    .stack_bottom();
+
             coroutine.resume();
-            if (coroutine.done())
-                coroutine.destroy();
+            if (stack_bottom.done())
+                stack_bottom.destroy();
         }
 
         tasks.clear();
