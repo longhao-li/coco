@@ -1,5 +1,7 @@
 # coco
 
+> This library has a series of known problems and should not be used for productions. See [onion](https://github.com/longhao-li/onion) for a more stable and fully tested async IO library.
+
 A lightweight and easy to use async IO library implemented with io_uring and C++20 coroutine.
 
 ## Build
